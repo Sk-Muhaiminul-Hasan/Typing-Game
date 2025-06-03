@@ -30,6 +30,12 @@ function newGame() {
   addClass(document.querySelector('.letter'), 'current');
   document.getElementById('info').innerHTML = (gameTime / 1000) + '';
   window.timer = null;
+  
+  // Position cursor at first letter
+  const firstLetter = document.querySelector('.letter.current');
+  const cursor = document.getElementById('cursor');
+  cursor.style.top = firstLetter.getBoundingClientRect().top + 2 + 'px';
+  cursor.style.left = firstLetter.getBoundingClientRect().left + 'px';
 }
 
 function getWpm() {
@@ -94,20 +100,24 @@ document.getElementById('game').addEventListener('keyup', ev => {
         addClass(currentLetter.nextSibling, 'current');
       }
     } else {
-      const incorrectLetter = document.createElement('span');
-      incorrectLetter.innerHTML = key;
-      incorrectLetter.className = 'letter incorrect extra';
-      currentWord.appendChild(incorrectLetter);
+      // Add extra letter in red, marked as 'extra' class for easy removal
+      const extraLetter = document.createElement('span');
+      extraLetter.innerHTML = key;
+      extraLetter.className = 'letter incorrect extra';
+      currentWord.appendChild(extraLetter);
     }
   }
 
   if (isSpace) {
     if (expected !== ' ') {
-      const lettersToInvalidate = [...document.querySelectorAll('.word.current .letter:not(.correct)')];
+      const lettersToInvalidate = [...document.querySelectorAll('.word.current .letter:not(.correct):not(.extra)')];
       lettersToInvalidate.forEach(letter => {
         addClass(letter, 'incorrect');
       });
     }
+    // Remove any extra letters before moving to next word
+    const extraLetters = [...document.querySelectorAll('.word.current .letter.extra')];
+    extraLetters.forEach(letter => letter.remove());
     removeClass(currentWord, 'current');
     addClass(currentWord.nextSibling, 'current');
     if (currentLetter) {
@@ -117,7 +127,11 @@ document.getElementById('game').addEventListener('keyup', ev => {
   }
 
   if (isBackspace) {
-    if (currentLetter && isFirstLetter) {
+    const extraLetters = [...currentWord.querySelectorAll('.letter.extra')];
+    if (extraLetters.length > 0) {
+      // Remove the last extra letter
+      extraLetters[extraLetters.length - 1].remove();
+    } else if (currentLetter && isFirstLetter) {
       // make prev word current, last letter current
       removeClass(currentWord, 'current');
       addClass(currentWord.previousSibling, 'current');
@@ -125,28 +139,29 @@ document.getElementById('game').addEventListener('keyup', ev => {
       addClass(currentWord.previousSibling.lastChild, 'current');
       removeClass(currentWord.previousSibling.lastChild, 'incorrect');
       removeClass(currentWord.previousSibling.lastChild, 'correct');
-    }
-    if (currentLetter && !isFirstLetter) {
+    } else if (currentLetter && !isFirstLetter) {
       // move back one letter, invalidate letter
       removeClass(currentLetter, 'current');
       addClass(currentLetter.previousSibling, 'current');
       removeClass(currentLetter.previousSibling, 'incorrect');
       removeClass(currentLetter.previousSibling, 'correct');
-    }
-    if (!currentLetter) {
-      addClass(currentWord.lastChild, 'current');
-      removeClass(currentWord.lastChild, 'incorrect');
-      removeClass(currentWord.lastChild, 'correct');
+    } else if (!currentLetter) {
+      const lastLetter = currentWord.lastChild;
+      if (lastLetter.classList.contains('extra')) {
+        lastLetter.remove();
+      } else {
+        addClass(lastLetter, 'current');
+        removeClass(lastLetter, 'incorrect');
+        removeClass(lastLetter, 'correct');
+      }
     }
   }
-
 
   if (currentWord.getBoundingClientRect().top > 250) {
     const words = document.getElementById('words');
     const margin = parseInt(words.style.marginTop || '0px');
     words.style.marginTop = (margin - 35) + 'px';
   }
-
 
   const nextLetter = document.querySelector('.letter.current');
   const nextWord = document.querySelector('.word.current');
@@ -155,9 +170,13 @@ document.getElementById('game').addEventListener('keyup', ev => {
   cursor.style.left = (nextLetter || nextWord).getBoundingClientRect()[nextLetter ? 'left' : 'right'] + 'px';
 });
 
-document.getElementById('newGameBtn').addEventListener('click', () => {
-  gameOver();
-  newGame();
+// Add click and keydown event listeners to start game
+document.addEventListener('keydown', function(e) {
+  document.getElementById('game').focus();
+});
+
+document.addEventListener('click', function(e) {
+  document.getElementById('game').focus();
 });
 
 newGame();
