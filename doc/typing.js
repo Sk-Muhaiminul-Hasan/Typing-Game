@@ -5,13 +5,23 @@ window.timer = null;
 window.gameStart = null;
 window.pauseTime = 0;
 
-function addClass(el,name) {
-  el.className += ' '+name;
-}
-function removeClass(el,name) {
-  el.className = el.className.replace(name,'');
+// Utility functions
+function addClass(el, name) {
+  el.className += ' ' + name;
 }
 
+function removeClass(el, name) {
+  el.className = el.className.replace(name, '');
+}
+
+function setActiveButton(buttonId) {
+  document.querySelectorAll('#buttons button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.getElementById(buttonId).classList.add('active');
+}
+
+// Word generation functions
 function randomWord() {
   const randomIndex = Math.ceil(Math.random() * wordsCount);
   return words[randomIndex - 1];
@@ -21,23 +31,71 @@ function formatWord(word) {
   return `<div class="word"><span class="letter">${word.split('').join('</span><span class="letter">')}</span></div>`;
 }
 
-function newGame() {
-  document.getElementById('words').innerHTML = '';
+// Game mode functions
+function getQuote() {
+  setActiveButton('quoteBtn');
+  $.ajax({
+    method: 'GET',
+    url: '/api/quotes', // <-- Update this to your new API endpoint
+    // Remove headers if not needed:
+    // headers: { 'X-Api-Key': ''},
+    contentType: 'application/json',
+    success: function(result) {
+      // Adjust this if your new API returns a different structure
+      // Example: if your API returns { quote: "..." }
+      const quoteText = result.quote || (result[0] && result[0].quote);
+      if (quoteText) {
+        startGame(quoteText.split(' '));
+      }
+    },
+    error: function ajaxError(jqXHR) {
+      console.error('Error: ', jqXHR.responseText);
+    }
+  });
+}
+
+function startWordTest() {
+  setActiveButton('wordTestBtn');
+  const wordList = [];
   for (let i = 0; i < 200; i++) {
-    document.getElementById('words').innerHTML += formatWord(randomWord());
+    wordList.push(randomWord());
   }
+  startGame(wordList);
+}
+
+// Game state functions
+function startGame(wordList) {
+  // Reset game state
+  if (window.timer) {
+    clearInterval(window.timer);
+  }
+  window.timer = null;
+  window.gameStart = null;
+  window.pauseTime = 0;
+  document.getElementById('game').classList.remove('over');
+  
+  // Clear and populate words
+  document.getElementById('words').innerHTML = '';
+  wordList.forEach(word => {
+    document.getElementById('words').innerHTML += formatWord(word);
+  });
+  
+  // Set initial state
   addClass(document.querySelector('.word'), 'current');
   addClass(document.querySelector('.letter'), 'current');
   document.getElementById('info').innerHTML = (gameTime / 1000) + '';
-  window.timer = null;
   
   // Position cursor at first letter
   const firstLetter = document.querySelector('.letter.current');
   const cursor = document.getElementById('cursor');
   cursor.style.top = firstLetter.getBoundingClientRect().top + 2 + 'px';
   cursor.style.left = firstLetter.getBoundingClientRect().left + 'px';
+  
+  // Focus the game
+  document.getElementById('game').focus();
 }
 
+// Game mechanics functions
 function getWpm() {
   const words = [...document.querySelectorAll('.word')];
   const lastTypedWord = document.querySelector('.word.current');
@@ -49,7 +107,7 @@ function getWpm() {
     const correctLetters = letters.filter(letter => letter.className.includes('correct'));
     return incorrectLetters.length === 0 && correctLetters.length === letters.length;
   });
-  return correctWords.length / gameTime * 60000;
+  return Math.round((correctWords.length / gameTime) * 60000);
 }
 
 function gameOver() {
@@ -59,6 +117,7 @@ function gameOver() {
   document.getElementById('info').innerHTML = `WPM: ${result}`;
 }
 
+// Event listeners
 document.getElementById('game').addEventListener('keyup', ev => {
   const key = ev.key;
   const currentWord = document.querySelector('.word.current');
@@ -72,8 +131,6 @@ document.getElementById('game').addEventListener('keyup', ev => {
   if (document.querySelector('#game.over')) {
     return;
   }
-
-  console.log({key,expected});
 
   if (!window.timer && isLetter) {
     window.timer = setInterval(() => {
@@ -100,7 +157,6 @@ document.getElementById('game').addEventListener('keyup', ev => {
         addClass(currentLetter.nextSibling, 'current');
       }
     } else {
-      // Add extra letter in red, marked as 'extra' class for easy removal
       const extraLetter = document.createElement('span');
       extraLetter.innerHTML = key;
       extraLetter.className = 'letter incorrect extra';
@@ -115,7 +171,6 @@ document.getElementById('game').addEventListener('keyup', ev => {
         addClass(letter, 'incorrect');
       });
     }
-    // Remove any extra letters before moving to next word
     const extraLetters = [...document.querySelectorAll('.word.current .letter.extra')];
     extraLetters.forEach(letter => letter.remove());
     removeClass(currentWord, 'current');
@@ -129,10 +184,8 @@ document.getElementById('game').addEventListener('keyup', ev => {
   if (isBackspace) {
     const extraLetters = [...currentWord.querySelectorAll('.letter.extra')];
     if (extraLetters.length > 0) {
-      // Remove the last extra letter
       extraLetters[extraLetters.length - 1].remove();
     } else if (currentLetter && isFirstLetter) {
-      // make prev word current, last letter current
       removeClass(currentWord, 'current');
       addClass(currentWord.previousSibling, 'current');
       removeClass(currentLetter, 'current');
@@ -140,7 +193,6 @@ document.getElementById('game').addEventListener('keyup', ev => {
       removeClass(currentWord.previousSibling.lastChild, 'incorrect');
       removeClass(currentWord.previousSibling.lastChild, 'correct');
     } else if (currentLetter && !isFirstLetter) {
-      // move back one letter, invalidate letter
       removeClass(currentLetter, 'current');
       addClass(currentLetter.previousSibling, 'current');
       removeClass(currentLetter.previousSibling, 'incorrect');
@@ -170,7 +222,6 @@ document.getElementById('game').addEventListener('keyup', ev => {
   cursor.style.left = (nextLetter || nextWord).getBoundingClientRect()[nextLetter ? 'left' : 'right'] + 'px';
 });
 
-// Add click and keydown event listeners to start game
 document.addEventListener('keydown', function(e) {
   document.getElementById('game').focus();
 });
@@ -179,4 +230,9 @@ document.addEventListener('click', function(e) {
   document.getElementById('game').focus();
 });
 
-newGame();
+// Button event listeners
+document.getElementById('quoteBtn').addEventListener('click', getQuote);
+document.getElementById('wordTestBtn').addEventListener('click', startWordTest);
+
+// Start with word test mode
+startWordTest();
